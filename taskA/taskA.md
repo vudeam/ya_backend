@@ -10,35 +10,35 @@
 
 ## Пример
 <table>
-	<thead>
-		<tr>
-			<th>Ввод</th>
-			<th>Вывод</th>
-		</tr>
-	</thead>
-	<tbody>
-		<tr>
-			<td>
+<thead>
+<tr>
+<th>Ввод</th>
+<th>Вывод</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
 
-			```python
-			from solution import Robot
+```python
+from solution import Robot
 
-			r = Robot((0, 0))
-			print(r.move('NENW'))
-			print(*r.path())
-			```
+r = Robot((0, 0))
+print(r.move('NENW'))
+print(*r.path())
+```
 
-			</td>
-			<td>
+</td>
+<td>
 
-			```python
-			(0, 2)
-			(0, 0) (0, 1) (1, 1) (1, 2) (0, 2)
-			```
+```python
+(0, 2)
+(0, 0) (0, 1) (1, 1) (1, 2) (0, 2)
+```
 
-			</td>
-		</tr>
-	</tbody>
+</td>
+</tr>
+</tbody>
 </table>
 
 | Ввод | Вывод |
