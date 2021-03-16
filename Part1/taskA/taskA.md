@@ -40,8 +40,3 @@ print(*r.path())
 </tr>
 </tbody>
 </table>
-
-| Ввод | Вывод |
-| ---- | ----- |
-| ```python
-
