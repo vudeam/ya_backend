@@ -44,7 +44,12 @@ def setup_shell_context():
 
 @app.route('/', methods=['GET'])
 def index():
-    return jsonify({'respone': 'hello'})
+    if not request.json:
+        abort(400)
+    for i in request.json:
+        print(i == 'data')
+        print(request.json['data'])
+    return jsonify({'respone': 'OK'}), 200
 
 @app.route('/couriers', methods=['POST'])
 def upload_couriers():
@@ -91,10 +96,35 @@ def upload_couriers():
 def update_couriers(courier_id):
     if not request.json:
         abort(400)
-    c = models.Courier.query \
-        .filter(models.Courier.id == courier_id).first()
-    print(f'Found courier: {c}')
-    return jsonify(c.as_dict()), 200
+    patch = {}
+    for item, val in request.json.items():
+        if item == 'courier_type':
+            patch[item] = val
+        elif item == 'regions':
+            patch[item] = val
+        elif item == 'working_hours':
+            patch[item] = val
+        else:
+            abort(400)
+
+    result = slasty_db.session.query(models.Courier) \
+        .filter(models.Courier.id == courier_id)
+
+    if result.count() <= 0:
+        abort(404)
+
+    found_courier = result.first()
+    for field, val in patch.items():
+        if field == 'courier_type':
+            found_courier.c_type = val
+        elif field == 'regions':
+            found_courier.regions = val
+        elif field == 'working_hours':
+            found_courier.work_hours = val
+    # slasty_db.session.add(found_courier)
+    slasty_db.session.commit()
+    
+    return jsonify(found_courier.as_dict()), 200
 
 @app.route('/orders', methods=['POST'])
 def upload_orders():
