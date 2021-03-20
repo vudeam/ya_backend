@@ -1,6 +1,7 @@
 import json
+import datetime as dt
 
-from sqlalchemy import TypeDecorator
+from sqlalchemy import TypeDecorator, orm
 from sqlalchemy.orm import relationship
 from app import slasty_db as db
 
@@ -26,8 +27,14 @@ class Courier(db.Model):
     work_hours = db.Column(JsonColumn(128))
 
     # if need to call some methods after the object is fetched from DB
-    # @orm.reconstructor
-    # def reconstruct(self):
+    @orm.reconstructor
+    def reconstruct(self):
+        self.hours_list = []
+        for shift in self.work_hours:
+            self.hours_list.append({
+                'start': dt.time.fromisoformat(shift.split('-')[0]),
+                'end': dt.time.fromisoformat(shift.split('-')[1])
+            })
 
     def as_dict(self):
         return {
