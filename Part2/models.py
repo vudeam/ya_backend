@@ -49,12 +49,21 @@ class Courier(db.Model):
 
 
 class Order(db.Model):
-   __tablename__ = 'orders'
+    __tablename__ = 'orders'
 
-   id = db.Column(db.Integer, primary_key=True)
-   weight = db.Column(db.Float(precision=2))
-   region = db.Column(db.Integer)
-   dlvr_hours = db.Column(JsonColumn(128))
+    id = db.Column(db.Integer, primary_key=True)
+    weight = db.Column(db.Float(precision=2))
+    region = db.Column(db.Integer)
+    dlvr_hours = db.Column(JsonColumn(128))
 
-   def __repr__(self):
+    @orm.reconstructor
+    def reconstruct(self):
+        self.hours_list = []
+        for time in self.dlvr_hours:
+            self.hours_list.append({
+                'start': dt.time.fromisoformat(time.split('-')[0]),
+                'end': dt.time.fromisoformat(time.split('-')[1])
+            })
+
+    def __repr__(self):
        return f'<Order {self.id} ({self.weight}) region:{self.region} hours:{self.dlvr_hours}>'
