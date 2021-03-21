@@ -30,6 +30,8 @@ class Courier(db.Model):
     @orm.reconstructor
     def reconstruct(self):
         self.hours_list = []
+        # if len(self.work_hours) <= 0:
+        #     return
         for shift in self.work_hours:
             self.hours_list.append({
                 'start': dt.time.fromisoformat(shift.split('-')[0]),
@@ -67,7 +69,8 @@ class Order(db.Model):
 
     def fits_in_time(self, courier: Courier) -> bool:
         """Determines if current order can be delivered by a provided courier
-        this method checks Order's delivery hours and Courier's work hours
+        this method checks Order's delivery hours and Courier's work hours.
+        If Courier's hours list is empty, should return False (I suppose)
         """
         for shift in courier.hours_list:
             for delivery in self.hours_list:
@@ -82,3 +85,17 @@ class Order(db.Model):
 
     def __repr__(self):
        return f'<Order {self.id} ({self.weight}) region:{self.region} hours:{self.dlvr_hours}>'
+
+
+class Assignment(db.Model):
+    __tablename__ = 'assignments'
+
+    c_id = db.Column(db.Integer, primary_key=True)
+    o_id = db.Column(db.Integer, primary_key=True)
+    o_region = db.Column(db.Integer)
+    assign_time = db.Column(db.DateTime)
+    complete_time = db.Column(db.DateTime)
+    completed = db.Column(db.Boolean)
+
+    def __repr__(self):
+        return f'<Assignment (courier {self.c_id} -> order {self.o_id}) region {self.o_region} assigned: {self.assign_time} completed: {self.complete_time}>'
