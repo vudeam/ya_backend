@@ -56,9 +56,14 @@ def setup_shell_context():
 def index():
     if not request.json:
         abort(400)
-    for i in request.json:
-        print(i == 'data')
-        print(request.json['data'])
+    for i, val in request.json.items():
+        print(val)
+        print(type(val))
+        try:
+            t = dt.datetime.fromisoformat(val)
+            print(t)
+        except ValueError:
+            pass
     return jsonify({'respone': 'OK'}), 200
 
 @app.route('/couriers', methods=['POST'])
@@ -231,11 +236,51 @@ def assign_orders():
 
 @app.route('/orders/complete', methods=['POST'])
 def complete_orders():
-    pass
+    if not request.json:
+        abort(400)
+    if ('courier_id' not in request.json or
+            'order_id' not in request.json or
+            'complete_time' not in request.json):
+            abort(400)
 
-@app.route('/couriers/<int:courier_id>')
+    try:
+        details = {
+            'c_id': request.json['courier_id'],
+            'o_id': request.json['order_id'],
+            'time': dt.datetime.fromisoformat(request.json['complete_time'])
+        }
+    except:
+        abort(400)
+
+    assignment_query = slasty_db.session.query(models.Assignment) \
+        .filter(
+            models.Assignment.c_id == details['c_id'],
+            models.Assignment.o_id == details['o_id']
+        )
+    if assignment_query.count() <= 0:
+        abort(400)
+
+    # complete order
+    assignment_query.first().completed = True
+    assignment_query.first().complete_time = details['time']
+    slasty_db.session.commit()
+    return jsonify({
+        'order_id': details['o_id']
+    })
+
+@app.route('/couriers/<int:courier_id>', methods=['GET'])
 def rate_courier(courier_id):
-    pass
+    result = slasty_db.session.query(models.Courier) \
+        .filter(models.Courier.id == courier_id)
+
+    if result.count() <= 0:
+        abort(404)
+
+    fetched_courier = result.first()
+    courier_dict = fetched_courier.as_dict()
+    courier_dict['rating'] = ''
+    courier_dict['earnings'] = ''
+    return jsonify(courier_dict), 200
 
 
 if __name__ == '__main__':
