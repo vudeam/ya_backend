@@ -65,5 +65,20 @@ class Order(db.Model):
                 'end': dt.time.fromisoformat(time.split('-')[1])
             })
 
+    def fits_in_time(self, courier: Courier) -> bool:
+        """Determines if current order can be delivered by a provided courier
+        this method checks Order's delivery hours and Courier's work hours
+        """
+        for shift in courier.hours_list:
+            for delivery in self.hours_list:
+                print(f'comparing: courier:{shift}       and order:{delivery}')
+                latest_start = max(shift['start'], delivery['start'])
+                eraliest_end = min(shift['end'], delivery['end'])
+                print('latest_start', latest_start)
+                print('earliest_end', eraliest_end)
+                if latest_start <= eraliest_end:
+                    return True
+        return False
+
     def __repr__(self):
        return f'<Order {self.id} ({self.weight}) region:{self.region} hours:{self.dlvr_hours}>'
