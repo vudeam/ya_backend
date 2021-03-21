@@ -23,8 +23,8 @@ class Courier(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     c_type = db.Column(db.String(10))
-    regions = db.Column(JsonColumn(128))
-    work_hours = db.Column(JsonColumn(128))
+    regions = db.Column(JsonColumn(255))
+    work_hours = db.Column(JsonColumn(255))
 
     # if need to call some methods after the object is fetched from DB
     @orm.reconstructor
@@ -56,7 +56,7 @@ class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     weight = db.Column(db.Float(precision=2))
     region = db.Column(db.Integer)
-    dlvr_hours = db.Column(JsonColumn(128))
+    dlvr_hours = db.Column(JsonColumn(255))
 
     @orm.reconstructor
     def reconstruct(self):
