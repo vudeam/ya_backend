@@ -1,3 +1,4 @@
+import datetime as dt
 from os import path
 from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -28,6 +29,7 @@ def setup_shell_context():
         'db': slasty_db,
         'Courier': models.Courier,
         'Order': models.Order,
+        'Assignment': models.Assignment,
         'c': models.Courier(
             id=123,
             c_type='foot',
@@ -39,6 +41,14 @@ def setup_shell_context():
             weight=2.256,
             region=22,
             dlvr_hours=['09:00-12:00', '16:00-21:30']
+        ),
+        'a': models.Assignment(
+            c_id=77,
+            o_id=88,
+            o_region=99,
+            assign_time=dt.datetime.now(),
+            complete_time=None,
+            completed=False
         )
     }
 
@@ -72,7 +82,7 @@ def upload_couriers():
             continue
 
         co = models.Courier(
-            id=item['id'],
+            id=item['courier_id'],
             c_type=item['courier_type'],
             regions=item['regions'],
             work_hours=item['working_hours']
@@ -121,9 +131,9 @@ def update_couriers(courier_id):
             found_courier.regions = val
         elif field == 'working_hours':
             found_courier.work_hours = val
-    # slasty_db.session.add(found_courier)
+
     slasty_db.session.commit()
-    
+
     return jsonify(found_courier.as_dict()), 200
 
 @app.route('/orders', methods=['POST'])
@@ -168,7 +178,56 @@ def upload_orders():
 
 @app.route('/orders/assign', methods=['POST'])
 def assign_orders():
-    pass
+    if not request.json or 'courier_id' not in request.json:
+        abort(400)
+    courier_query = slasty_db.session.query(models.Courier) \
+        .filter(models.Courier.id == request.json['courier_id'])
+    if courier_query.count() <= 0:
+        abort(400)
+
+    # orders in courier's regions
+    fetched_courier = courier_query.first()
+    orders_query = slasty_db.session.query(models.Order) \
+        .filter(models.Order.region.in_(fetched_courier.regions)) \
+        .all()
+
+    # orders which fit in courier's time
+    orders = list(filter(lambda o: o.fits_in_time(fetched_courier), orders_query))
+    if len(orders) <= 0:
+        return jsonify({
+            'orders': []
+        }), 200
+
+    # order by weight (asc)
+    orders.sort(key=lambda o: o.weight)
+    print(f'sorted orders in regions {fetched_courier.regions}:')
+    for i in orders:
+        print(i)
+
+    weight_sum = 0
+    avail_orders = []
+    for order in orders:
+        if (weight_sum + order.weight) <= courier_weights[fetched_courier.c_type]:
+            print(f'take order: {order}')
+            avail_orders.append(order)
+            weight_sum += order.weight
+
+    assign_time = dt.datetime.utcnow()
+    for order in avail_orders:
+        asg = models.Assignment(
+            c_id=fetched_courier.id,
+            o_id=order.id,
+            o_region=order.region,
+            assign_time=assign_time,
+            complete_time=None,
+            completed=False
+        )
+        slasty_db.session.add(asg)
+    slasty_db.session.commit()
+    return jsonify({
+        'orders': list(map(lambda o: {'id': o.id}, avail_orders)),
+        'assign_time': assign_time
+    }), 200
 
 @app.route('/orders/complete', methods=['POST'])
 def complete_orders():
