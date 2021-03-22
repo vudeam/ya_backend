@@ -84,7 +84,13 @@ class Order(db.Model):
         return False
 
     def __repr__(self):
-       return f'<Order {self.id} ({self.weight}) region:{self.region} hours:{self.dlvr_hours}>'
+       return f'<Order {self.id} ({self.weight} kg) region:{self.region} hours:{self.dlvr_hours}>'
+
+    # def __eq__(self, other):
+    #     return (self.id == other.id and
+    #             self.weight == other.weight and
+    #             self.region == other.region and
+    #             self.dlvr_hours == other.dlvr_hours)
 
 
 class Assignment(db.Model):
@@ -93,6 +99,7 @@ class Assignment(db.Model):
     c_id = db.Column(db.Integer, primary_key=True)
     o_id = db.Column(db.Integer, primary_key=True)
     o_region = db.Column(db.Integer)
+    o_weight = db.Column(db.Float(precision=2))
     assign_time = db.Column(db.DateTime)
     complete_time = db.Column(db.DateTime)
     completed = db.Column(db.Boolean)

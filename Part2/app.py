@@ -1,23 +1,24 @@
 import datetime as dt
+from dateutil import parser
 from os import path
 from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from config import Config, settings
 
+# TODO: unassign extra orders on courier's PATCH
+# TODO: validate couriers' ids in POST /couriers
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 slasty_db = SQLAlchemy(app)
 
-# if not path.exists(f'{settings["basedir"]}/{settings["test_db"]}'):
-#     slasty_db.create_all()
-
 # courier type => max weight
 courier_weights = {
-    'foot': 10,
-    'bike': 15,
-    'car': 50
+    'foot': 10.0,
+    'bike': 15.0,
+    'car': 50.0
 }
 
 # from models import Courier, Order
@@ -46,6 +47,7 @@ def setup_shell_context():
             c_id=77,
             o_id=88,
             o_region=99,
+            o_weight=1.23,
             assign_time=dt.datetime.now(),
             complete_time=None,
             completed=False
@@ -83,6 +85,10 @@ def upload_couriers():
 
         # extra fields
         if len(item) > 4:
+            errors.append({'id': item['courier_id']})
+            continue
+
+        if item['courier_type'] not in ['foot', 'bike', 'car']:
             errors.append({'id': item['courier_id']})
             continue
 
@@ -160,6 +166,10 @@ def upload_orders():
             errors.append({'id': item['order_id']})
             continue
 
+        if item['weight'] < .01 or item['weight'] > 50:
+            errors.append({'id': item['order_id']})
+            continue
+
         order = models.Order(
             id=item['order_id'],
             weight=item['weight'],
@@ -196,26 +206,53 @@ def assign_orders():
         .filter(models.Order.region.in_(fetched_courier.regions)) \
         .all()
 
+    # orders not taken by others and not completed
+    not_avail_orders = [ o_id for o_id, in
+        slasty_db.session.query(models.Assignment.o_id) \
+            .all()
+    ]
+    # .filter(models.Assignment.c_id == fetched_courier.id) \
+    # .filter(models.Assignment.completed == True) \
+
+    # convert assignments to list of ids
+    # not_avail_ids = list(map(lambda a: a.o_id, not_avail_orders))
+
     # orders which fit in courier's time
     orders = list(filter(lambda o: o.fits_in_time(fetched_courier), orders_query))
-    if len(orders) <= 0:
-        return jsonify({
-            'orders': []
-        }), 200
+    # if len(orders) <= 0:
+    #     return jsonify({
+    #         'orders': []
+    #     }), 200
 
     # order by weight (asc)
     orders.sort(key=lambda o: o.weight)
-    print(f'sorted orders in regions {fetched_courier.regions}:')
-    for i in orders:
-        print(i)
 
-    weight_sum = 0
+    # courier's load is sum(seights) of assigned (and not completed) orders
+    load = slasty_db.session.query(func.sum(models.Assignment.o_weight)) \
+        .filter(models.Assignment.c_id == fetched_courier.id) \
+        .filter(models.Assignment.completed == False) \
+        .scalar()
+    if load is None:
+        load = 0
+    load = round(load, 2)
+    print(f'courier has {load} kg')
+
+    weight_sum = 0 + load
     avail_orders = []
     for order in orders:
+        # skip unavailable order
+        if order.id in not_avail_orders:
+            continue
         if (weight_sum + order.weight) <= courier_weights[fetched_courier.c_type]:
             print(f'take order: {order}')
             avail_orders.append(order)
             weight_sum += order.weight
+            print(f'now loaded with {weight_sum}')
+
+    if len(avail_orders) <= 0:
+        return jsonify({
+            'orders': []
+        }), 200
 
     assign_time = dt.datetime.utcnow()
     for order in avail_orders:
@@ -223,6 +260,7 @@ def assign_orders():
             c_id=fetched_courier.id,
             o_id=order.id,
             o_region=order.region,
+            o_weight=order.weight,
             assign_time=assign_time,
             complete_time=None,
             completed=False
@@ -231,7 +269,7 @@ def assign_orders():
     slasty_db.session.commit()
     return jsonify({
         'orders': list(map(lambda o: {'id': o.id}, avail_orders)),
-        'assign_time': assign_time
+        'assign_time': assign_time.isoformat(timespec='milliseconds') + 'Z'
     }), 200
 
 @app.route('/orders/complete', methods=['POST'])
@@ -247,16 +285,15 @@ def complete_orders():
         details = {
             'c_id': request.json['courier_id'],
             'o_id': request.json['order_id'],
-            'time': dt.datetime.fromisoformat(request.json['complete_time'])
+            # 'time': dt.datetime.fromisoformat(request.json['complete_time'])
+            'time': parser.parse(request.json['complete_time'])
         }
     except:
         abort(400)
 
     assignment_query = slasty_db.session.query(models.Assignment) \
-        .filter(
-            models.Assignment.c_id == details['c_id'],
-            models.Assignment.o_id == details['o_id']
-        )
+        .filter(models.Assignment.c_id == details['c_id']) \
+        .filter(models.Assignment.o_id == details['o_id'])
     if assignment_query.count() <= 0:
         abort(400)
 
