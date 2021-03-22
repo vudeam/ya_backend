@@ -38,7 +38,7 @@ class Courier(db.Model):
                 'end': dt.time.fromisoformat(shift.split('-')[1])
             })
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
         return {
         'courier_id': self.id,
         'courier_type': self.c_type,

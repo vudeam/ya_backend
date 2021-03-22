@@ -8,6 +8,7 @@ from config import Config, settings
 
 # TODO: unassign extra orders on courier's PATCH
 # TODO: add errors descriptions
+# TODO: [last but not least] check PEP8
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -86,22 +87,34 @@ def upload_couriers():
         if ('courier_type' not in item or
                 'regions' not in item or
                 'working_hours' not in item):
-                errors.append({'id': item['courier_id']})
+                errors.append({
+                    'id': item['courier_id'],
+                    'error_description': 'No required field(-s) provided. Each courier must have courier_id, courier_type, regions and working_hours fields.'
+                })
                 continue
 
         # extra fields
         if len(item) > 4:
-            errors.append({'id': item['courier_id']})
+            errors.append({
+                'id': item['courier_id'],
+                'error_description': 'No extra fields allowed.'
+            })
             continue
 
         # courier id is taken
         if item['courier_id'] in all_ids:
-            errors.append({'id': item['courier_id']})
+            errors.append({
+                'id': item['courier_id'],
+                'error_description': 'Courier with provided courier_id already exists.'
+            })
             continue
 
         # wrong courier type
         if item['courier_type'] not in ['foot', 'bike', 'car']:
-            errors.append({'id': item['courier_id']})
+            errors.append({
+                'id': item['courier_id'],
+                'error_description': 'courier_type must be either foot, bike or car.'
+            })
             continue
 
         co = models.Courier(
@@ -170,16 +183,25 @@ def upload_orders():
         if ('weight' not in item or
             'region' not in item or
             'delivery_hours' not in item):
-            errors.append({'id': item['order_id']})
+            errors.append({
+                'id': item['order_id'],
+                'error_description': 'No required field(-s) provided. Each order must have order_id, weight, region and delivery_hours fields.'
+            })
             continue
 
         # extra fields
         if len(item) > 4:
-            errors.append({'id': item['order_id']})
+            errors.append({
+                'id': item['order_id'],
+                'error_description': 'No extra fields allowed.'
+            })
             continue
 
         if item['weight'] < .01 or item['weight'] > 50:
-            errors.append({'id': item['order_id']})
+            errors.append({
+                'id': item['order_id'],
+                'error_description': 'Invalid order weight. It must not be less than .01 and greater than 50.'
+            })
             continue
 
         order = models.Order(
