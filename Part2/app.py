@@ -7,7 +7,7 @@ from sqlalchemy import func
 from config import Config, settings
 
 # TODO: unassign extra orders on courier's PATCH
-# TODO: validate couriers' ids in POST /couriers
+# TODO: add errors descriptions
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -21,11 +21,13 @@ courier_weights = {
     'car': 50.0
 }
 
-# from models import Courier, Order
 import models
 
 @app.shell_context_processor
 def setup_shell_context():
+    """Used to have some values defined when you call `flask shell`
+    in the project folder. Good for testing things out
+    """
     return {
         'db': slasty_db,
         'Courier': models.Courier,
@@ -72,6 +74,10 @@ def index():
 def upload_couriers():
     if not request.json or 'data' not in request.json:
         abort(400)
+
+    all_ids = [ c_id for c_id, in
+        slasty_db.session.query(models.Courier.id).all()
+    ]
     couriers = []
     errors = []
     # absolutely horrible indentaion, but accepted by PEP8 validator
@@ -88,6 +94,12 @@ def upload_couriers():
             errors.append({'id': item['courier_id']})
             continue
 
+        # courier id is taken
+        if item['courier_id'] in all_ids:
+            errors.append({'id': item['courier_id']})
+            continue
+
+        # wrong courier type
         if item['courier_type'] not in ['foot', 'bike', 'car']:
             errors.append({'id': item['courier_id']})
             continue
