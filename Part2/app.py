@@ -6,7 +6,6 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from config import Config, settings
 
-# TODO: PATCH /couriers/:id pop extra weight
 # TODO: PATCH /couriers/:id pop extra regions
 # TODO: PATCH /couriers/:id pop extra schedule
 # TODO: [last but not least] check PEP8
@@ -20,7 +19,8 @@ slasty_db = SQLAlchemy(app)
 courier_weights = {
     'foot': 10.0,
     'bike': 15.0,
-    'car': 50.0
+    'car': 50.0,
+    'SPEC': 0.0
 }
 
 import models
@@ -29,6 +29,8 @@ def sum_assignment_weights(assignments) -> float:
     """Total weight of all Assignment.o_weight
     int the given list[Assignment]
     """
+    if len(assignments) <= 0 or assignments[0] is None:
+        return 0
     s = sum([ w for w in
         list(map(lambda a: a.o_weight, assignments))
     ])
@@ -175,13 +177,16 @@ def update_couriers(courier_id):
     for field, val in patch.items():
         if field == 'courier_type':
             # 'downgrade' of weight - need to pop extra orders
-            if courier_weights[val] < found_courier:
+            if courier_weights[val] < courier_weights[found_courier.c_type]:
                 # unassign orders
                 assigned = slasty_db.session.query(models.Assignment) \
                     .filter(models.Assignment.c_id == found_courier.id) \
                     .filter(models.Assignment.completed == False) \
                     .order_by(models.Assignment.o_weight) \
                     .all()
+                while sum_assignment_weights(assigned) > courier_weights[val]:
+                    if len(assigned) > 0:
+                        slasty_db.session.delete(assigned.pop(0))
             found_courier.c_type = val
         elif field == 'regions':
             #
@@ -189,7 +194,7 @@ def update_couriers(courier_id):
         elif field == 'working_hours':
             #
             found_courier.work_hours = val
-
+#!!!!!
     if len(orders_to_unassign) > 0:
         asg_to_delete = slasty_db.session.query(models.Assignment) \
             .filter(models.Assignment.c_id == found_courier.id) \
