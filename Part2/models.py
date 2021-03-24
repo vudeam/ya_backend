@@ -105,4 +105,4 @@ class Assignment(db.Model):
     completed = db.Column(db.Boolean)
 
     def __repr__(self):
-        return f'<Assignment (courier {self.c_id} -> order {self.o_id}) region {self.o_region} assigned: {self.assign_time} completed: {self.complete_time}>'
+        return f'<Assignment (courier {self.c_id} -> order {self.o_id}, {self.o_weight} kg) region {self.o_region} assigned: {self.assign_time} completed: {self.complete_time}>'

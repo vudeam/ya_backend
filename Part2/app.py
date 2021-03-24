@@ -6,8 +6,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from config import Config, settings
 
-# TODO: unassign extra orders on courier's PATCH
-# TODO: add errors descriptions
+# TODO: PATCH /couriers/:id pop extra weight
+# TODO: PATCH /couriers/:id pop extra regions
+# TODO: PATCH /couriers/:id pop extra schedule
 # TODO: [last but not least] check PEP8
 
 app = Flask(__name__)
@@ -23,6 +24,15 @@ courier_weights = {
 }
 
 import models
+
+def sum_assignment_weights(assignments) -> float:
+    """Total weight of all Assignment.o_weight
+    int the given list[Assignment]
+    """
+    s = sum([ w for w in
+        list(map(lambda a: a.o_weight, assignments))
+    ])
+    return round(s, 2)
 
 @app.shell_context_processor
 def setup_shell_context():
@@ -160,13 +170,32 @@ def update_couriers(courier_id):
         abort(404)
 
     found_courier = result.first()
+    # order ids which can not be assigned anymore
+    orders_to_unassign = []
     for field, val in patch.items():
         if field == 'courier_type':
+            # 'downgrade' of weight - need to pop extra orders
+            if courier_weights[val] < found_courier:
+                # unassign orders
+                assigned = slasty_db.session.query(models.Assignment) \
+                    .filter(models.Assignment.c_id == found_courier.id) \
+                    .filter(models.Assignment.completed == False) \
+                    .order_by(models.Assignment.o_weight) \
+                    .all()
             found_courier.c_type = val
         elif field == 'regions':
+            #
             found_courier.regions = val
         elif field == 'working_hours':
+            #
             found_courier.work_hours = val
+
+    if len(orders_to_unassign) > 0:
+        asg_to_delete = slasty_db.session.query(models.Assignment) \
+            .filter(models.Assignment.c_id == found_courier.id) \
+            .filter(models.Assignment.o_id.in_(orders_to_unassign))
+        for a in asg_to_delete:
+            slasty_db.session.delete(a)
 
     slasty_db.session.commit()
 
@@ -236,6 +265,17 @@ def assign_orders():
 
     # orders in courier's regions
     fetched_courier = courier_query.first()
+
+    # if found assigned uncompleted orders - stop and do nothing
+    uncomplete_assignments = slasty_db.session.query(models.Assignment) \
+        .filter(models.Assignment.c_id == fetched_courier.id) \
+        .filter(models.Assignment.completed == False)
+    if uncomplete_assignments.count() > 0:
+        return jsonify({
+            'orders': list(map(lambda a: {'id': a.o_id}, uncomplete_assignments.all())),
+            'assign_time': uncomplete_assignments.first().assign_time.isoformat(timespec='milliseconds') + 'Z'
+        }), 200
+
     orders_query = slasty_db.session.query(models.Order) \
         .filter(models.Order.region.in_(fetched_courier.regions)) \
         .all()
