@@ -189,12 +189,26 @@ def update_couriers(courier_id):
                         slasty_db.session.delete(assigned.pop(0))
             found_courier.c_type = val
         elif field == 'regions':
-            #
+            # new patch is 'bigger'
+            if set(found_courier.regions).issubset(val) and len(val) > len(found_courier.regions):
+                # no need to pop orders
+                pass
+            # new patch leaves less regions
+            elif set(val).issubset(found_courier.regions) and len(val) < len(found_courier.regions):
+                assigned = slasty_db.session.query(models.Assignment) \
+                    .filter(models.Assignment.c_id == found_courier.id) \
+                    .filter(models.Assignment.completed == False) \
+                    .order_by(models.Assignment.o_weight) \
+                    .all()
+                get_asg_regs = lambda a_list: list(map(lambda a: a.o_region, a_list))
+                while not set(get_asg_regs(assigned)).issubset(val):
+                    if len(assigned) > 0:
+                        slasty_db.session.delete(assigned.pop(0))
             found_courier.regions = val
         elif field == 'working_hours':
             #
             found_courier.work_hours = val
-#!!!!!
+#!!!!! delete this?
     if len(orders_to_unassign) > 0:
         asg_to_delete = slasty_db.session.query(models.Assignment) \
             .filter(models.Assignment.c_id == found_courier.id) \
