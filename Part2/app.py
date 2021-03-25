@@ -6,7 +6,6 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from config import Config, settings
 
-# TODO: PATCH /couriers/:id pop extra regions
 # TODO: PATCH /couriers/:id pop extra schedule
 # TODO: [last but not least] check PEP8
 
@@ -19,8 +18,7 @@ slasty_db = SQLAlchemy(app)
 courier_weights = {
     'foot': 10.0,
     'bike': 15.0,
-    'car': 50.0,
-    'SPEC': 0.0
+    'car': 50.0
 }
 
 import models
@@ -172,6 +170,11 @@ def update_couriers(courier_id):
         abort(404)
 
     found_courier = result.first()
+
+    get_assigned = lambda c_id: slasty_db.session.query(models.Assignment) \
+        .filter(models.Assignment.c_id == c_id) \
+        .filter(models.Assignment.completed == False)
+
     # order ids which can not be assigned anymore
     orders_to_unassign = []
     for field, val in patch.items():
@@ -179,11 +182,7 @@ def update_couriers(courier_id):
             # 'downgrade' of weight - need to pop extra orders
             if courier_weights[val] < courier_weights[found_courier.c_type]:
                 # unassign orders
-                assigned = slasty_db.session.query(models.Assignment) \
-                    .filter(models.Assignment.c_id == found_courier.id) \
-                    .filter(models.Assignment.completed == False) \
-                    .order_by(models.Assignment.o_weight) \
-                    .all()
+                assigned = get_assigned(found_courier.id).all()
                 while sum_assignment_weights(assigned) > courier_weights[val]:
                     if len(assigned) > 0:
                         slasty_db.session.delete(assigned.pop(0))
@@ -195,26 +194,28 @@ def update_couriers(courier_id):
                 pass
             # new patch leaves less regions
             elif set(val).issubset(found_courier.regions) and len(val) < len(found_courier.regions):
-                assigned = slasty_db.session.query(models.Assignment) \
-                    .filter(models.Assignment.c_id == found_courier.id) \
-                    .filter(models.Assignment.completed == False) \
-                    .order_by(models.Assignment.o_weight) \
-                    .all()
+                assigned = get_assigned(found_courier.id).all()
                 get_asg_regs = lambda a_list: list(map(lambda a: a.o_region, a_list))
                 while not set(get_asg_regs(assigned)).issubset(val):
                     if len(assigned) > 0:
                         slasty_db.session.delete(assigned.pop(0))
             found_courier.regions = val
         elif field == 'working_hours':
-            #
-            found_courier.work_hours = val
-#!!!!! delete this?
-    if len(orders_to_unassign) > 0:
-        asg_to_delete = slasty_db.session.query(models.Assignment) \
-            .filter(models.Assignment.c_id == found_courier.id) \
-            .filter(models.Assignment.o_id.in_(orders_to_unassign))
-        for a in asg_to_delete:
-            slasty_db.session.delete(a)
+            if not set(found_courier.work_hours) == set(val):
+                found_courier.work_hours = val
+                found_courier.reconstruct()
+                assigned = get_assigned(found_courier.id).all()
+                # assigned orders
+                orders = slasty_db.session.query(models.Order) \
+                    .filter(models.Order.id.in_(list(map(lambda a: a.o_id, assigned)))) \
+                    .all()
+
+                while not all([o.fits_in_time(found_courier) for o in orders]) and len(orders) > 0:
+                    if len(assigned) > 0:
+                        slasty_db.session.delete(assigned.pop(0))
+                    orders = slasty_db.session.query(models.Order) \
+                    .filter(models.Order.id.in_(list(map(lambda a: a.o_id, assigned)))) \
+                    .all()
 
     slasty_db.session.commit()
 
