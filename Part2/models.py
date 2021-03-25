@@ -30,8 +30,6 @@ class Courier(db.Model):
     @orm.reconstructor
     def reconstruct(self):
         self.hours_list = []
-        # if len(self.work_hours) <= 0:
-        #     return
         for shift in self.work_hours:
             self.hours_list.append({
                 'start': dt.time.fromisoformat(shift.split('-')[0]),
@@ -40,11 +38,11 @@ class Courier(db.Model):
 
     def as_dict(self) -> dict:
         return {
-        'courier_id': self.id,
-        'courier_type': self.c_type,
-        'regions': self.regions,
-        'working_hours': self.work_hours
-    }
+            'courier_id': self.id,
+            'courier_type': self.c_type,
+            'regions': self.regions,
+            'working_hours': self.work_hours
+        }
 
     def __repr__(self):
         return f'<Courier {self.id} ({self.c_type}) regions:{self.regions} hours:{self.work_hours}>'
@@ -74,23 +72,14 @@ class Order(db.Model):
         """
         for shift in courier.hours_list:
             for delivery in self.hours_list:
-                print(f'comparing: courier:{shift}       and order:{delivery}')
                 latest_start = max(shift['start'], delivery['start'])
                 eraliest_end = min(shift['end'], delivery['end'])
-                print('latest_start', latest_start)
-                print('earliest_end', eraliest_end)
                 if latest_start <= eraliest_end:
                     return True
         return False
 
     def __repr__(self):
-       return f'<Order {self.id} ({self.weight} kg) region:{self.region} hours:{self.dlvr_hours}>'
-
-    # def __eq__(self, other):
-    #     return (self.id == other.id and
-    #             self.weight == other.weight and
-    #             self.region == other.region and
-    #             self.dlvr_hours == other.dlvr_hours)
+        return f'<Order {self.id} ({self.weight} kg) region:{self.region} hours:{self.dlvr_hours}>'
 
 
 class Assignment(db.Model):
