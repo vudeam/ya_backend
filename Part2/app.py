@@ -5,8 +5,9 @@ from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from config import Config, settings
+import models
 
-# TODO: PATCH /couriers/:id pop extra schedule
+# TODO: fix PATCH (region and working_hours seem not to work)
 # TODO: [last but not least] check PEP8
 
 app = Flask(__name__)
@@ -21,18 +22,28 @@ courier_weights = {
     'car': 50.0
 }
 
-import models
 
 def sum_assignment_weights(assignments) -> float:
     """Total weight of all Assignment.o_weight
     int the given list[Assignment]
+    TODO: rewrite to a single lambda expression
+    for using inside of route's method?
     """
     if len(assignments) <= 0 or assignments[0] is None:
         return 0
-    s = sum([ w for w in
-        list(map(lambda a: a.o_weight, assignments))
-    ])
+    s = sum([w for w in list(map(lambda a: a.o_weight, assignments))])
     return round(s, 2)
+
+
+def get_assignments(courier_id: int):
+    """All uncompleted Assignments
+    which were assigned to the provided courier_id
+    """
+    return slasty_db.session.query(models.Assignment) \
+        .filter(models.Assignment.c_id == courier_id) \
+        .filter(models.Assignment.completed is False) \
+        .order_by(models.Assignment.o_weight)
+
 
 @app.shell_context_processor
 def setup_shell_context():
@@ -67,6 +78,7 @@ def setup_shell_context():
         )
     }
 
+
 @app.route('/', methods=['GET'])
 def index():
     if not request.json:
@@ -81,12 +93,14 @@ def index():
             pass
     return jsonify({'respone': 'OK'}), 200
 
+
 @app.route('/couriers', methods=['POST'])
 def upload_couriers():
     if not request.json or 'data' not in request.json:
         abort(400)
 
-    all_ids = [ c_id for c_id, in
+    all_ids = [
+        c_id for c_id, in
         slasty_db.session.query(models.Courier.id).all()
     ]
     couriers = []
@@ -148,6 +162,7 @@ def upload_couriers():
         'couriers': list(map(lambda c: {'id': c.id}, couriers))
     }), 201
 
+
 @app.route('/couriers/<int:courier_id>', methods=['PATCH'])
 def update_couriers(courier_id):
     if not request.json:
@@ -171,10 +186,6 @@ def update_couriers(courier_id):
 
     found_courier = result.first()
 
-    get_assigned = lambda c_id: slasty_db.session.query(models.Assignment) \
-        .filter(models.Assignment.c_id == c_id) \
-        .filter(models.Assignment.completed == False)
-
     # order ids which can not be assigned anymore
     orders_to_unassign = []
     for field, val in patch.items():
@@ -182,7 +193,7 @@ def update_couriers(courier_id):
             # 'downgrade' of weight - need to pop extra orders
             if courier_weights[val] < courier_weights[found_courier.c_type]:
                 # unassign orders
-                assigned = get_assigned(found_courier.id).all()
+                assigned = get_assignments(found_courier.id).all()
                 while sum_assignment_weights(assigned) > courier_weights[val]:
                     if len(assigned) > 0:
                         slasty_db.session.delete(assigned.pop(0))
@@ -192,9 +203,12 @@ def update_couriers(courier_id):
             if set(found_courier.regions).issubset(val) and len(val) > len(found_courier.regions):
                 # no need to pop orders
                 pass
-            # new patch leaves less regions
-            elif set(val).issubset(found_courier.regions) and len(val) < len(found_courier.regions):
-                assigned = get_assigned(found_courier.id).all()
+            ## new patch leaves less regions
+            # patch changes regions
+            else:
+                #set(val).issubset(found_courier.regions) and len(val) < len(found_courier.regions:
+                print(f'patching {found_courier.regions} into {val}')
+                assigned = get_assignments(found_courier.id).all()
                 get_asg_regs = lambda a_list: list(map(lambda a: a.o_region, a_list))
                 while not set(get_asg_regs(assigned)).issubset(val):
                     if len(assigned) > 0:
@@ -204,7 +218,7 @@ def update_couriers(courier_id):
             if not set(found_courier.work_hours) == set(val):
                 found_courier.work_hours = val
                 found_courier.reconstruct()
-                assigned = get_assigned(found_courier.id).all()
+                assigned = get_assignments(found_courier.id).all()
                 # assigned orders
                 orders = slasty_db.session.query(models.Order) \
                     .filter(models.Order.id.in_(list(map(lambda a: a.o_id, assigned)))) \
@@ -220,6 +234,7 @@ def update_couriers(courier_id):
     slasty_db.session.commit()
 
     return jsonify(found_courier.as_dict()), 200
+
 
 @app.route('/orders', methods=['POST'])
 def upload_orders():
@@ -274,6 +289,7 @@ def upload_orders():
         'orders': list(map(lambda o: {'id': o.id}, orders))
     }), 201
 
+
 @app.route('/orders/assign', methods=['POST'])
 def assign_orders():
     if not request.json or 'courier_id' not in request.json:
@@ -308,17 +324,8 @@ def assign_orders():
     # .filter(models.Assignment.c_id == fetched_courier.id) \
     # .filter(models.Assignment.completed == True) \
 
-    # convert assignments to list of ids
-    # not_avail_ids = list(map(lambda a: a.o_id, not_avail_orders))
-
     # orders which fit in courier's time
     orders = list(filter(lambda o: o.fits_in_time(fetched_courier), orders_query))
-    # if len(orders) <= 0:
-    #     return jsonify({
-    #         'orders': []
-    #     }), 200
-
-    # order by weight (asc)
     orders.sort(key=lambda o: o.weight)
 
     # courier's load is sum(seights) of assigned (and not completed) orders
@@ -329,7 +336,6 @@ def assign_orders():
     if load is None:
         load = 0
     load = round(load, 2)
-    print(f'courier has {load} kg')
 
     weight_sum = 0 + load
     avail_orders = []
@@ -366,6 +372,7 @@ def assign_orders():
         'assign_time': assign_time.isoformat(timespec='milliseconds') + 'Z'
     }), 200
 
+
 @app.route('/orders/complete', methods=['POST'])
 def complete_orders():
     if not request.json:
@@ -398,6 +405,7 @@ def complete_orders():
     return jsonify({
         'order_id': details['o_id']
     })
+
 
 @app.route('/couriers/<int:courier_id>', methods=['GET'])
 def rate_courier(courier_id):
