@@ -25,7 +25,7 @@ courier_weights = {
 
 def sum_assignment_weights(assignments) -> float:
     """Total weight of all Assignment.o_weight
-    int the given list[Assignment]
+    in the given list[Assignment]
     TODO: rewrite to a single lambda expression
     for using inside of route's method?
     """
@@ -41,8 +41,15 @@ def get_assignments(courier_id: int):
     """
     return slasty_db.session.query(models.Assignment) \
         .filter(models.Assignment.c_id == courier_id) \
-        .filter(models.Assignment.completed is False) \
+        .filter(models.Assignment.completed == False) \
         .order_by(models.Assignment.o_weight)
+
+
+def get_asg_regions(assignments) -> list:
+    """Returns list of o_regions
+    in the provided list[Assignment]
+    """
+    return list(map(lambda a: a.o_region, assignments))
 
 
 @app.shell_context_processor
@@ -186,8 +193,6 @@ def update_couriers(courier_id):
 
     found_courier = result.first()
 
-    # order ids which can not be assigned anymore
-    orders_to_unassign = []
     for field, val in patch.items():
         if field == 'courier_type':
             # 'downgrade' of weight - need to pop extra orders
@@ -203,14 +208,12 @@ def update_couriers(courier_id):
             if set(found_courier.regions).issubset(val) and len(val) > len(found_courier.regions):
                 # no need to pop orders
                 pass
-            ## new patch leaves less regions
             # patch changes regions
             else:
-                #set(val).issubset(found_courier.regions) and len(val) < len(found_courier.regions:
                 print(f'patching {found_courier.regions} into {val}')
                 assigned = get_assignments(found_courier.id).all()
-                get_asg_regs = lambda a_list: list(map(lambda a: a.o_region, a_list))
-                while not set(get_asg_regs(assigned)).issubset(val):
+                # get_asg_regs = lambda a_list: list(map(lambda a: a.o_region, a_list))
+                while not set(get_asg_regions(assigned)).issubset(val):
                     if len(assigned) > 0:
                         slasty_db.session.delete(assigned.pop(0))
             found_courier.regions = val
@@ -228,8 +231,8 @@ def update_couriers(courier_id):
                     if len(assigned) > 0:
                         slasty_db.session.delete(assigned.pop(0))
                     orders = slasty_db.session.query(models.Order) \
-                    .filter(models.Order.id.in_(list(map(lambda a: a.o_id, assigned)))) \
-                    .all()
+                        .filter(models.Order.id.in_(list(map(lambda a: a.o_id, assigned)))) \
+                        .all()
 
     slasty_db.session.commit()
 
@@ -245,8 +248,8 @@ def upload_orders():
     for item in request.json['data']:
         # no necessary fields
         if ('weight' not in item or
-            'region' not in item or
-            'delivery_hours' not in item):
+                'region' not in item or
+                'delivery_hours' not in item):
             errors.append({
                 'id': item['order_id'],
                 'error_description': 'No required field(-s) provided. Each order must have order_id, weight, region and delivery_hours fields.'
@@ -317,9 +320,9 @@ def assign_orders():
         .all()
 
     # orders not taken by others and not completed
-    not_avail_orders = [ o_id for o_id, in
-        slasty_db.session.query(models.Assignment.o_id) \
-            .all()
+    not_avail_orders = [
+        o_id for o_id, in
+        slasty_db.session.query(models.Assignment.o_id).all()
     ]
     # .filter(models.Assignment.c_id == fetched_courier.id) \
     # .filter(models.Assignment.completed == True) \
