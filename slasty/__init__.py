@@ -6,7 +6,7 @@ from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 
-from config import Config, settings
+from app_config import Config, settings
 import models
 
 
