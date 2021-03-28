@@ -6,14 +6,14 @@ from flask import Flask, jsonify, request, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 
-from app_config import Config, settings
-import models
+from config import Config, settings
 
 
 app = Flask(__name__)
 app.config.from_object(Config)
 
 slasty_db = SQLAlchemy(app)
+import models
 
 # courier type => max weight
 courier_weights = {
